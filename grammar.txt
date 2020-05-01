@@ -1,0 +1,209 @@
+prog = { contract | class | importdecl | interface } EOF
+// AST:
+// type Program struct {
+//     contracts []Contract
+//     classes []Class
+//     imports []ImportDecl
+// }
+importdecl = IMPORT [ STRINGLITERAL ] [ LBRACK HEXLITERAL RBRACK ] [ AS IDENT ] SEMI
+// EX: import "something.smrt" [0x123abcdef];
+// AST:
+// type ImportDecl struct {
+//     path string
+//     hash string // maybe this should be some other type?
+// }
+contract = CONTRACT IDENT contractBody
+// EX: contract Foo { }
+// AST:
+// type Contract struct {
+//     name string
+//     body ContractBody
+// }
+contractBody = LCURL { classStuff | fallback } RCURL
+classStuff = constructor | pooldecl | storagedecl | constdecl SEMI | funcdef | eventDecl
+// AST:
+// type ContractBody struct {
+//     constructor Constructor
+//     pools []PoolDecl
+//     storageVars []StorageDecl
+//     constants []ConstDecl
+//     functions []FuncDef
+// }
+fallback = FALLBACK codeblock
+eventDecl = EVENT IDENT LPAREN [ IDENT type [ INDEXED ] { COMMA IDENT type [ INDEXED ] } ] RPAREN SEMI
+constructor = CONSTRUCTOR LPAREN [ paramList ] RPAREN codeblock
+// EX: constructor() { }
+// AST: Function
+paramList = IDENT type { COMMA IDENT type }
+// EX: foo uint256, bar address
+// AST: Parameter[]
+class = CLASS IDENT classBody
+// EX: class Bar { }
+// AST:
+// type Class struct {
+//     name string
+//     body ClassBody
+// }
+classBody = LCURL { classStuff } RCURL
+pooldecl = POOL IDENT SEMI
+// EX: pool tokens;
+// AST:
+// type PoolDecl struct {
+//     name string
+// }
+vardecl = VAR IDENT type [EQ expr]
+// EX: var total uint256 = 3;
+// AST:
+// type VarDecl struct {
+//     name string
+//     type Type
+//     value Expr
+// }
+storagedecl = STORAGE IDENT type SEMI
+// EX: storage balances map[address]uint256;
+// AST:
+// type StorageDecl struct {
+//     name string
+//     type Type
+// }
+constdecl = CONST IDENT type EQ expr
+// EX: const total uint256 = 3;
+// AST:
+// type ConstDecl {
+//     name string
+//     type Type
+//     value Expr
+// }
+type = qualident | arraytype | maptype
+qualident = IDENT [ DOT IDENT ]
+arraytype = LBRACK [ expr ] RBRACK type
+// EX: [5][3][]uint256
+// AST:
+// type ArrayType struct {
+//     length uint
+//     type Type
+// }
+maptype = MAP LBRACK type RBRACK type
+// EX: map[address]uint256
+// AST:
+// type MapType struct {
+//     keyType Type
+//     valType Type
+// }
+expr  = expr00 { LOGOR expr00 }
+expr00 = expr0 { LOGAND expr0 }
+expr0 = expr1 [ relation expr1 ]
+expr1 = expr2 { addop expr2 }
+expr2 = expr3 { mulop expr3 }
+expr3 = expr4 { EXP expr4 }
+expr4 = expr5 [ AS type ]
+expr5 = designator [ LPAREN [ argList ] RPAREN ] | literal | LPAREN expr RPAREN | MINUS expr5 | LARR expr5 | new | MINT BANG expr5 | BURN BANG expr5 | BANG expr5
+designator = IDENT [ BANG ] { DOT IDENT [ BANG ] | LBRACK expr RBRACK }
+arrayLiteral = LBRACK RBRACK type LCURL [ exprList ] RCURL
+literal = DECLITERAL | HEXLITERAL | BYTESLITERAL | TRUE | FALSE | arrayLiteral | STRINGLITERAL
+relation = EQEQ | NEQ | LT | LEQ | GT | GEQ
+addop = PLUS | MINUS | BITAND | BITOR | LSHIFT | RSHIFT
+mulop = STAR | DIV
+new = NEW qualident LPAREN [ argList ] RPAREN
+
+
+exprList = expr { COMMA expr }
+designatorList = designator { COMMA designator }
+
+simpleStatement = assignOrMoveOrCall | vardecl | constdecl | store | assert | call | emit
+complexStatement = ifstmt | loop | codeblock | ret
+
+emit = EMIT IDENT LPAREN [ argList ] RPAREN
+
+ret = RETURN [ expr | LCURL argList RCURL ] SEMI
+
+assignOrMoveOrCall = designatorList ( EQ exprList [ FROM expr ] | LARR expr [ FROM expr ] | LPAREN [ argList ] RPAREN | ( PLUSEQ | MINUSEQ ) expr )
+// EX: x = true;
+// AST:
+// type Assignment struct {
+//     lhs Expr
+//     rhs Expr
+// }
+// EX: x <- amount from y;
+// AST:
+// type Move struct {
+//     lhs Expr
+//     amount Expr
+//     rhs Expr
+// }
+// EX: foo()
+// AST:
+// type FunctionCall struct {
+//     target Expr
+//     arguments []Argument
+// }
+argList = arg { COMMA arg }
+arg = IDENT COLON expr
+// EX: n: 42
+// AST:
+// type Argument struct {
+//     name string
+//     value Expr
+// }
+codeblock = LCURL { simpleStatement SEMI | complexStatement } RCURL
+// AST:
+// type CodeBlock struct {
+//     statements []Statement
+// }
+ifstmt = IF expr codeblock [ ELSE codeblock ]
+// EX: if x == 5 { }
+// AST:
+// type IfStatement struct {
+//     condition Expr
+//     then CodeBlock
+//     else CodeBlock
+// }
+forstmt = FOR [ simpleStatement ] SEMI [ expr ] SEMI [ simpleStatement ] codeblock
+// EX: for var i uint256 = 6
+// AST:
+// type ForStatement struct {
+//     init Statement
+//     cond Expr
+//     loop Statement
+//     body CodeBlock
+// }
+while = WHILE expr codeblock
+// EX: while (true) { }
+// AST:
+// type WhileStatement struct {
+//     cond Expr
+//     body CodeBlock
+// }
+loop = forstmt | while
+store = STORE BANG assignOrMoveOrCall
+// EX: store! x = 5;
+// AST:
+// type Store struct {
+//     assigment Assignment
+// }
+assert = ASSERT expr [ COMMA STRINGLITERAL ]
+// EX: assert x, "x has to be true";
+// AST:
+// type Assert struct {
+//     cond Expr
+//     reason string
+// }
+funcsig = { decorator } FUNC IDENT [ BANG ] LPAREN [ paramList ] RPAREN [ type | LPAREN IDENT type { COMMA IDENT type } RPAREN ]
+decorator = AT ( PAYABLE | solidity )
+solidity = SOLIDITY COLON IDENT LPAREN [ type { COMMA type } ] RPAREN [ type | LPAREN type { COMMA type } RPAREN ]
+funcdef = funcsig codeblock
+// EX: func double(x uint256, y uint256) (uint256, uint256) { }
+// AST:
+// type FuncSig struct {
+//     name string
+//     params []Parameter
+//     type Type
+// }
+// type Parameter struct {
+//     name string
+//     type Type
+// }
+
+call = CALL BANG expr { COMMA ( GAS | DATA | VALUE ) EQ expr }
+
+interface = INTERFACE IDENT LCURL { funcsig SEMI } RCURL

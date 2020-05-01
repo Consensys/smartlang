@@ -1,0 +1,25 @@
+contract A {
+	storage x uint256
+
+	constructor() {
+
+		store! x = 3 + 4
+
+		while true {
+			assert false
+		}
+		for ; true; {
+			assert true
+		}
+		if false {
+			assert true
+		} else {
+			assert false
+		}
+		assert true
+
+		if 5 - 3 >= 10 {
+			assert false
+		}
+	}
+}

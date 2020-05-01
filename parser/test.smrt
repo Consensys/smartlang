@@ -1,0 +1,142 @@
+import "imported.smrt" [0xf20876a21db9946623e3ad503bd624be1713ad379d5eef107800f53b838fe40e] as imported
+
+interface ERC20 {
+    func transfer(to address, amount uint256) bool
+}
+
+contract FuncTest {
+    func something(x uint256, y uint256) (uint256 sum, uint256 product) {
+        return { sum: x + y as uint256, product: x * y as uint256 }
+    }
+
+    func test() uint256 {
+        var s uint256
+        var p uint256
+
+        s, p = sum, product from something(x: 2, y: 3)
+
+        return s
+    }
+
+    fallback { }
+}
+
+contract CoinFlip {
+    // "wei" is an implicitly defined pool.
+
+    storage games []Game
+
+    @payable
+    func Start!(commitment bytes32) {
+        // msg.value is a minted value of type wei.
+        games.push(item: new Game(commitment: commitment, wager: msg.val))
+    }
+
+    @payable
+    func TakeBet!(id uint256, choice bool) {
+        games[id].TakeBet!(player: msg.sender, wager: msg.val, choice: choice)
+    }
+
+    func Reveal!(id uint256, choice bool, nonce uint256) {
+        games[id].Reveal!(choice: choice, nonce: nonce)
+    }
+
+    // For brevity, canceling and timing out are omitted.
+}
+
+class Game {
+    storage player1 address
+    storage player2 address
+    storage commitment bytes32
+    storage p2choice bool
+    storage pot wei
+
+    constructor(_commitment bytes32, wager wei) {
+        // Because wager is of type wei (a pool), its value must be moved to
+        // storage before the end of the function.
+        pot <- wager
+        store! commitment = _commitment
+    }
+
+    func TakeBet!(player address, wager wei, choice bool) {
+        assert wager == pot, "Incorrect \"wager\" amount." // <-- just testing string literals
+
+        store! p2choice = choice
+        pot <- wager
+    }
+
+    func Reveal!(choice bool, nonce uint256) {
+        // Following line isn't right... we need something like maybe variadic functions?
+        assert keccak256(a:choice, b:nonce) == commitment, "Wrong choice/nonce."
+
+        var winner address
+
+        if choice == p2choice {
+            winner = player1
+        } else {
+            winner = player2
+        }
+
+        // burn! means that the amount is removed from pot
+        call! winner, value = burn! pot
+
+        // Potential bug here!
+        // What prevents the winner from calling this function repeatedly?
+    }
+
+    // For brevity, canceling and timing out are omitted.
+}
+
+contract Token {
+    const Name string = "MyToken"
+    const Symbol string = "MTOK"
+    const Decimals byte = 18
+
+    event Transfer(frm address indexed, to address indexed, val uint256)
+    event Approval(owner address indexed, spender address indexed, val uint256)
+
+    // This declares "tokens" as a "pool", which means value must be conserved. This
+    // makes it illegal to create or destroy tokens without explicitly minting or
+    // burning them.
+    pool tokens
+    
+    // These have automatic public getters.
+    storage BalanceOf map[address]tokens
+    storage Allowance map[address]map[address]uint256
+
+    // Note that initialSupply is explicitly minted here. This means the function is
+    // required to store the value in some storage variable of type "tokens".
+    constructor(initialSupply uint256) {
+        // The arrow operator moves value within a pool. The left-hand side is
+        // increased and the right-hand side decreased simultaneously.
+        BalanceOf[msg.sender] <- mint! initialSupply tokens
+    }
+    
+    @solidity:totalSupply() uint256
+    func TotalSupply() uint256 {
+        // .sum is implicit on the pool.
+        return tokens.sum
+    }
+
+    @solidity:transfer(address,uint256) bool
+    func Transfer!(to address, amount uint256) bool {
+        BalanceOf[to] <- amount from BalanceOf[msg.sender]
+        emit Transfer(frm: msg.sender, to: to, val: amount)
+        return true
+    }
+
+    @solidity:transferFrom(address,address,uint256) bool
+    func TransferFrom!(frm address, to address, amount uint256) bool {
+        Allowance[frm][msg.sender] -= amount
+        BalanceOf[to] <- amount from BalanceOf[frm]
+        emit Transfer(frm: frm, to: to, val: amount)
+        return true
+    }
+
+    @solidity:approve(address,uint256) bool
+    func Approve!(spender address, amount uint256) bool {
+        Allowance[msg.sender][spender] = amount
+        emit Approval(owner: msg.sender, spender: spender, val: amount)
+        return true
+    }
+}

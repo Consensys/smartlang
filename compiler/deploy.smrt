@@ -1,0 +1,30 @@
+contract Factorial {
+	storage num uint256
+	storage result uint256
+
+	constructor() {
+		store! result = 1
+		for store! num = 5; num > 0; store! num = num - 1 {
+			store! result = result * num
+		}
+		assert result == 120 // 5 * 4 * 3 * 2
+
+		store! num = 5
+		store! result = 1
+		while num > 0 {
+			store! result = result * num
+			store! num = num - 1
+		}
+		assert result == 120
+
+		assert factorial(n: 5) == 120
+	}
+
+	func factorial(n uint256) uint256 {
+		if n == 0 {
+			return 1
+		} else {
+			return n * factorial(n: n-1)
+		}
+	}
+}

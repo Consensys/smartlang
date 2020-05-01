@@ -1,0 +1,21 @@
+contract SecurityToken {
+    storage accounts map[address]Account
+}
+
+class Account {
+    pool tokens
+
+    storage lockedBalance tokens
+    storage spendableBalance tokens
+    storage lockupExpiration uint256
+
+    func GetBalances!() (locked tokens, spendable tokens) {
+        if block.timestamp >= lockupExpiration {
+            store! lockupExpiration = 0
+
+            store! spendableBalance <- lockedBalance from lockedBalance
+        }
+
+        return { locked: lockedBalance, spendable: spendableBalance }
+    }
+}

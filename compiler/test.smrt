@@ -1,0 +1,80 @@
+import "test2.smrt" as test2
+
+contract A {
+	storage b uint256
+	storage c []uint256
+	storage m map[uint256]string
+	storage foo test2.Foo
+
+	constructor(x uint256) {
+		var a uint256
+
+		for var i uint256 = 0; i < 10; i += 1 {
+			a = a + i
+		}
+
+		while a > 0 {
+			a -= 6
+		}
+
+		store! b = a
+		store! b, a = x, y from test()
+
+		store! c[a] = b
+
+		store! m[5] = "hello"
+
+		test(a1: 3, b1: 12)
+	}
+
+	func test(a1 uint256, b1 uint256) (x uint256, y uint256) {
+		call! msg.sender, data=[]byte{1 as byte, 2 as byte}, gas=3, value=42
+		return { x: 42, y: 99 }
+	}
+}
+
+contract Token {
+	const Name string = "MyToken"
+	const Symbol string = "MTOK"
+	const Decimals byte = 18 as byte
+
+	event Transfer(frm address indexed, to address indexed, val uint256)
+	event Approval(owner address indexed, spender address indexed, val uint256)
+
+	pool tokens
+
+	storage BalanceOf map[address]tokens
+	storage Allowance map[address]map[address]uint256
+
+	constructor(initialSupply uint256) {
+		store! BalanceOf[msg.sender] <- mint! initialSupply tokens
+	}
+
+	@solidity:totalSupply() uint256
+	func TotalSupply() uint256 {
+		// .sum is implicit on the pool.
+		return tokens.sum
+	}
+
+	@solidity:transfer(address,uint256) bool
+	func Transfer!(to address, amount uint256) bool {
+		store! BalanceOf[to] <- amount from BalanceOf[msg.sender]
+		emit Transfer(frm: msg.sender, to: to, val: amount)
+		return true
+	}
+
+	@solidity:transferFrom(address,address,uint256) bool
+	func TransferFrom!(frm address, to address, amount uint256) bool {
+		store! Allowance[frm][msg.sender] -= amount
+		store! BalanceOf[to] <- amount from BalanceOf[frm]
+		emit Transfer(frm: frm, to: to, val: amount)
+		return true
+	}
+
+	@solidity:approve(address,uint256) bool
+	func Approve!(spender address, amount uint256) bool {
+		store! Allowance[msg.sender][spender] = amount
+		emit Approval(owner: msg.sender, spender: spender, val: amount)
+		return true
+	}
+}
